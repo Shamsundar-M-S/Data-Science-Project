@@ -1,0 +1,84 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environments
+venv/
+venv312/
+.venv/
+env/
+ENV/
+
+# IDEs
+.vscode/
+.idea/
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Python Packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Logs
+*.log
+
+# Environment Variables
+.env
+.env.*
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# FastF1 Cache
+.fastf1-cache/
+
+# SQLite Databases
+*.sqlite
+*.sqlite3
+*.db
+
+# Temporary Files
+*.tmp
+*.temp
+
+# PyInstaller
+*.spec
+
+# Python Bytecode
+*.pyo
+*.pyd
+
+# macOS
+.AppleDouble
+.LSOverride
+
+# Windows
+Desktop.ini
+
+# Linux
+*~
+
+# Git LFS
+*.lfs
+
+# Large Data Files (optional)
+*.ff1pkl
+
+# Generated Reports
+coverage.xml
