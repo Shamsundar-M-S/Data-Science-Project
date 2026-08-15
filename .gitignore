@@ -52,6 +52,7 @@ computed_data/
 
 # Analytics Data
 analytics_data/
+analytics_output/
 
 # SQLite Databases
 *.sqlite
