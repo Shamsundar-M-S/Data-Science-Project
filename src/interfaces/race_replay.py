@@ -265,9 +265,20 @@ class F1RaceReplayWindow(arcade.Window):
                 else:
                     pos["fraction"] = 0.0
                 
-            if driver_progress:
                 leader_code = max(driver_progress.keys(), key=lambda c: driver_progress[c])
                 leader_lap = current_frame["drivers"][leader_code].get("lap", 1)
+                
+            # Inject tyre health data for strategy analytics
+            if self.degradation_integrator and self.degradation_integrator.is_initialized():
+                for code, driver_data in current_frame["drivers"].items():
+                    # Only calculate if not already present or lap changed
+                    health = self.degradation_integrator.get_health_for_frame(
+                        driver_code=code,
+                        frame_data=current_frame,
+                        frame_index=int(self.frame_index)
+                    )
+                    if health:
+                        driver_data["tyre_health_info"] = health
         
         # Format time
         t = current_frame["t"] if current_frame else 0

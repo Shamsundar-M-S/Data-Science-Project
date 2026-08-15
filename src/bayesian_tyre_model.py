@@ -26,8 +26,10 @@ class TyreProfile:
     warmup_laps: int
     max_analysis_laps: Optional[int]
     max_degradation: float
+    prior_degradation_rate: float = 0.0
     
     def __post_init__(self):
+        self.prior_degradation_rate = self.degradation_rate
         if self.degradation_rate < 0:
             raise ValueError(f"Degradation rate must be non-negative: {self.degradation_rate}")
         if self.warmup_laps < 0:
@@ -378,7 +380,7 @@ class BayesianTyreDegradationModel:
                     prior_weight = 0.5
                 
                 updated_rate = (
-                    prior_weight * tyre.degradation_rate +
+                    prior_weight * tyre.prior_degradation_rate +
                     (1 - prior_weight) * median_slope
                 )
                 
@@ -569,10 +571,14 @@ class BayesianTyreDegradationModel:
         
         effective_degradation = tyre.degradation_rate * abrasion_factor
         
-        if laps_on_tyre == 1:
-            alpha_t = tyre.reset_pace
+        completed_laps_count = len(driver_laps)
+        if driver in self._latent_states and len(self._latent_states[driver]) >= completed_laps_count and completed_laps_count > 0:
+            alpha_t = self._latent_states[driver][completed_laps_count - 1]
         else:
-            alpha_t = tyre.reset_pace + (laps_on_tyre - 1) * effective_degradation
+            if laps_on_tyre == 1:
+                alpha_t = tyre.reset_pace
+            else:
+                alpha_t = tyre.reset_pace + (laps_on_tyre - 1) * effective_degradation
         
         warmup_penalty = self._compute_warmup_penalty(tyre, laps_on_tyre)
         alpha_t = alpha_t + warmup_penalty
@@ -590,8 +596,8 @@ class BayesianTyreDegradationModel:
         
         predicted_time = alpha_t + self.fuel_effect * fuel_next + mismatch_penalty
         
-        if driver in self._latent_uncertainty and self._latent_uncertainty[driver]:
-            var_alpha = self._latent_uncertainty[driver][-1]
+        if driver in self._latent_uncertainty and len(self._latent_uncertainty[driver]) >= completed_laps_count and completed_laps_count > 0:
+            var_alpha = self._latent_uncertainty[driver][completed_laps_count - 1]
         else:
             var_alpha = self.sigma_eta ** 2
         

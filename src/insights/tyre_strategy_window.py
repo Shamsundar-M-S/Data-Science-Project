@@ -44,21 +44,24 @@ BORDER      = "#2a2a2a"
 class StintBar(QWidget):
     """Single driver row: name + horizontal coloured stint bars."""
 
-    def __init__(self, code, stints, total_laps, position=None, current_lap=1, parent=None):
+    def __init__(self, code, stints, total_laps, position=None, current_lap=1, health_info=None, parent=None):
         super().__init__(parent)
         self.code        = code
         self.stints      = stints
         self.total_laps  = total_laps or 60
         self.position    = position
         self.current_lap = current_lap
-        self.setFixedHeight(28)
+        self.health_info = health_info
+        self.setFixedHeight(32)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-    def update_data(self, stints, total_laps, position=None, current_lap=1):
+    def update_data(self, stints, total_laps, position=None, current_lap=1, health_info=None):
         self.stints      = stints
         self.total_laps  = total_laps or self.total_laps
         self.position    = position
         self.current_lap = current_lap
+        if health_info is not None:
+            self.health_info = health_info
         self.update()
 
     def paintEvent(self, event):
@@ -69,9 +72,10 @@ class StintBar(QWidget):
         H = self.height()
         NAME_W   = 52
         POS_W    = 34
+        INFO_W   = 220
         BAR_PAD  = 6
         bar_x    = NAME_W + POS_W + BAR_PAD
-        bar_w    = W - bar_x - BAR_PAD
+        bar_w    = W - bar_x - BAR_PAD - INFO_W
 
         # Row background
         painter.fillRect(0, 0, W, H, QColor(ROW_BG))
@@ -134,6 +138,54 @@ class StintBar(QWidget):
             lx = bar_x + int((self.current_lap - 1) / self.total_laps * bar_w)
             painter.setPen(QPen(QColor("#ffffff"), 1, Qt.DotLine))
             painter.drawLine(lx, 4, lx, H - 4)
+
+        # Draw health info
+        if self.health_info:
+            info_x = bar_x + bar_w + BAR_PAD
+            h = self.health_info.get("health", 0)
+            deg = self.health_info.get("expected_delta", 0.0)
+            
+            # Draw health bar
+            bar_width = 80
+            fill_width = int((h / 100.0) * bar_width)
+            if h >= 75:
+                hc = QColor(0, 220, 0)
+            elif h >= 50:
+                hc = QColor(int(220 * (1 - (h-50)/25.0)), 220, 0)
+            elif h >= 25:
+                hc = QColor(220, int(220 * (h-25)/25.0), 0)
+            else:
+                hc = QColor(220, int(110 * (h/25.0)), 0)
+            
+            painter.fillRect(info_x, H//2 - 4, bar_width, 8, QColor("#222222"))
+            painter.fillRect(info_x, H//2 - 4, fill_width, 8, hc)
+            
+            # Health text
+            painter.setPen(QColor(TEXT_WHITE))
+            painter.setFont(QFont("Arial", 8))
+            painter.drawText(QRect(info_x + bar_width + 8, 0, INFO_W - bar_width - 8, H), 
+                             Qt.AlignVCenter | Qt.AlignLeft, 
+                             f"{h}% | +{deg:.1f}s")
+            
+            # Heuristic pit window estimation
+            # These are domain-based strategy heuristics, NOT direct ML predictions.
+            # A deficit > 2.5s or health < 30% strongly implies a pit stop is optimal.
+            PIT_NOW_DEFICIT_THRESHOLD = 2.5
+            PIT_NOW_HEALTH_THRESHOLD = 30
+            
+            if deg > PIT_NOW_DEFICIT_THRESHOLD or h < PIT_NOW_HEALTH_THRESHOLD:
+                painter.setPen(QColor("#FF4444"))
+                painter.drawText(QRect(info_x + bar_width + 80, 0, INFO_W, H), 
+                                 Qt.AlignVCenter | Qt.AlignLeft, 
+                                 "PIT NOW (Heuristic)")
+            elif h < 50:
+                # Basic heuristic calculation of laps remaining until health hits 30%
+                laps_est = int((h - PIT_NOW_HEALTH_THRESHOLD) / max(0.5, (100 - h) / max(1, self.health_info.get("laps_on_tyre", 1))))
+                laps_est = max(1, laps_est)
+                painter.setPen(QColor("#FFaa00"))
+                painter.drawText(QRect(info_x + bar_width + 80, 0, INFO_W, H), 
+                                 Qt.AlignVCenter | Qt.AlignLeft, 
+                                 f"PIT IN ~{laps_est}L (Heuristic)")
 
         # Thin separator line
         painter.setPen(QPen(QColor(BORDER), 1))
@@ -212,12 +264,16 @@ class TyreStrategyWindow(PitWallWindow):
                     self.prev_tyres  = saved.get("prev_tyres", {})
                     self.current_lap = saved.get("current_lap", 1)
                     self.total_laps  = saved.get("total_laps", 60)
+                    self.health_data = saved.get("health_data", {})
                     print("Tyre state loaded successfully.")
         except FileNotFoundError:
+            self.health_data = {}
             print("No saved tyre state found. Starting fresh.")
         except json.JSONDecodeError:
+            self.health_data = {}
             print("Saved tyre state corrupted. Starting fresh.")
         except Exception as e:
+            self.health_data = {}
             print(f"Failed to load tyre state: {e}")
 
     def _save_state(self):
@@ -232,6 +288,7 @@ class TyreStrategyWindow(PitWallWindow):
                     "prev_tyres":  self.prev_tyres,
                     "current_lap": self.current_lap,
                     "total_laps":  self.total_laps,
+                    "health_data": self.health_data
                 }, f)
             print("Tyre state saved successfully.")
         except PermissionError:
@@ -253,7 +310,7 @@ class TyreStrategyWindow(PitWallWindow):
             QWidget {{ background: {BG}; color: {TEXT_WHITE}; }}
             QFrame#header {{ background: #111111; }}
         """)
-        self.resize(900, 640)
+        self.resize(1100, 640)  # widened to fit health info
 
         root = QWidget()
         self.setCentralWidget(root)
@@ -349,7 +406,7 @@ class TyreStrategyWindow(PitWallWindow):
     # --------------------------------------------------------- Telemetry ---
 
     def on_telemetry_data(self, data):
-        if "frame" not in data:
+        if "frame" not in data or data["frame"] is None:
             return
 
         frame   = data["frame"]
@@ -363,6 +420,7 @@ class TyreStrategyWindow(PitWallWindow):
                 self.stints     = {}
                 self.prev_tyres = {}
                 self.positions  = {}
+                self.health_data = {}
             self.total_laps = new_total
 
         self.current_lap = int(frame.get("lap", self.current_lap))
@@ -371,6 +429,10 @@ class TyreStrategyWindow(PitWallWindow):
             tyre = driver.get("tyre")
             lap  = driver.get("lap")
             pos  = driver.get("position")
+            health = driver.get("tyre_health_info")
+
+            if health:
+                self.health_data[code] = health
 
             if pos is not None:
                 self.positions[code] = int(pos)
@@ -412,11 +474,12 @@ class TyreStrategyWindow(PitWallWindow):
 
         for i, code in enumerate(sorted_codes):
             pos = self.positions.get(code)
+            health = self.health_data.get(code)
             if code not in self._row_widgets:
-                bar = StintBar(code, self.stints[code], self.total_laps, pos, self.current_lap)
+                bar = StintBar(code, self.stints[code], self.total_laps, pos, self.current_lap, health)
                 self._row_widgets[code] = bar
             else:
                 self._row_widgets[code].update_data(
-                    self.stints[code], self.total_laps, pos, self.current_lap
+                    self.stints[code], self.total_laps, pos, self.current_lap, health
                 )
             self.rows_layout.insertWidget(i, self._row_widgets[code])

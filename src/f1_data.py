@@ -65,19 +65,38 @@ def _process_single_driver(args):
         try:
             lap_tel = lap.get_telemetry()
         except KeyError as e:
-            # Handle case where FastF1 fails to merge car and position data
-            # due to empty position telemetry (missing 'Date' column)
             if "'Date'" in str(e):
-                print(f"Warning: Skipping lap {lap.LapNumber} for driver {driver_code} due to missing position telemetry")
+                print(f"Warning: Skipping lap {lap.LapNumber} for driver {driver_code} due to missing position telemetry ('Date' KeyError)")
                 continue
             else:
-                # Re-raise if it's a different KeyError
+                # Re-raise unexpected KeyError to avoid hiding upstream bugs
                 raise
+        except ValueError as e:
+            # FastF1 can raise ValueError if session telemetry is entirely missing or malformed
+            print(f"Warning: Skipping lap {lap.LapNumber} for driver {driver_code} due to FastF1 ValueError: {e}")
+            continue
+
         lap_number = lap.LapNumber
         tyre_compund_as_int = get_tyre_compound_int(lap.Compound)
         tyre_life = lap.TyreLife if pd.notna(lap.TyreLife) else 0
 
-        if lap_tel.empty:
+        # Validate we have necessary columns before accessing them
+        required_cols = ["SessionTime", "X", "Y", "Distance", "RelativeDistance", "Speed", "nGear", "DRS", "Throttle", "Brake"]
+        if lap_tel.empty or not all(col in lap_tel.columns for col in required_cols):
+            print(f"Warning: Skipping lap {lap.LapNumber} for driver {driver_code} due to missing columns or empty telemetry")
+            continue
+
+        # Drop rows where SessionTime is missing (do NOT interpolate time)
+        lap_tel = lap_tel.dropna(subset=["SessionTime"])
+
+        # Interpolate physical telemetry over tiny gaps only (limit=5 frames is ~0.5 seconds at 10Hz)
+        # We do not bfill to avoid leaking future data backward into the start of the lap
+        fill_cols = ["X", "Y", "Distance", "RelativeDistance", "Speed", "nGear", "DRS", "Throttle", "Brake"]
+        lap_tel[fill_cols] = lap_tel[fill_cols].ffill(limit=5)
+
+        # If significant gaps remain (NaNs still present), discard the lap rather than fabricating data
+        if lap_tel[fill_cols].isna().any().any():
+            print(f"Warning: Skipping lap {lap.LapNumber} for driver {driver_code} due to large telemetry gaps")
             continue
 
         t_lap = lap_tel["SessionTime"].dt.total_seconds().to_numpy()

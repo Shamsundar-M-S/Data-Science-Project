@@ -6,3 +6,5 @@ arcade
 pyside6
 questionary
 rich
+scipy
+pyarrow>=14.0.0
