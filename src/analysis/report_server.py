@@ -2,6 +2,8 @@ import os
 import sys
 import webbrowser
 import socket
+import glob
+import re
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from rich.console import Console
 
@@ -20,54 +22,75 @@ def serve_and_open_report(session_id: str, session_title: str, output_dir="analy
     Start a local HTTP server and open the Phase 2 report in the browser.
     Blocks until interrupted by the user (Ctrl+C).
     """
-    phase1_html = f"{output_dir}/{session_id}/phase1_report_{session_id}.html".replace("\\", "/")
-    phase2_html = f"{output_dir}/{session_id}/phase2_report_{session_id}.html".replace("\\", "/")
-
-    # Do not start if report doesn't exist
-    if not os.path.exists(phase2_html):
-        console.print(f"[bold red]Error:[/bold red] Report {phase2_html} does not exist.")
+    def extract_phase_num(filepath):
+        basename = os.path.basename(filepath)
+        match = re.search(r'phase(\d+)_report', basename)
+        return int(match.group(1)) if match else 0
+        
+    # Dynamically find all phase reports
+    search_pattern = f"{output_dir}/{session_id}/phase*_report_{session_id}.html"
+    discovered_reports = sorted(glob.glob(search_pattern), key=extract_phase_num)
+    
+    if not discovered_reports:
+        console.print(f"[bold red]Error:[/bold red] Required reports do not exist.")
         return
+
+    # Use the highest numbered phase as the primary report to open
+    primary_html = discovered_reports[-1].replace("\\", "/")
 
     port = find_available_port()
     if not port:
         console.print("[bold red]Error:[/bold red] Could not find an available port to start the report server.")
         return
 
-    phase1_url = f"http://localhost:{port}/{phase1_html}"
-    phase2_url = f"http://localhost:{port}/{phase2_html}"
     server_url = f"http://localhost:{port}/"
+    primary_url = f"http://localhost:{port}/{primary_html}"
 
     console.print("\n============================================================")
     console.print("ANALYSIS COMPLETE")
     console.print("============================================================\n")
     console.print("Session:")
     console.print(f"{session_title}\n")
-    console.print("Phase 1 Report:")
-    console.print(f"{phase1_url}\n")
-    console.print("Phase 2 Report:")
-    console.print(f"{phase2_url}\n")
+    
+    for report_path in discovered_reports:
+        report_path = report_path.replace("\\", "/")
+        # Extract "Phase X" from "phaseX_report_..."
+        filename = os.path.basename(report_path)
+        phase_str = filename.split("_report_")[0].capitalize().replace("Phase", "Phase ")
+        report_url = f"http://localhost:{port}/{report_path}"
+        console.print(f"{phase_str} Report:")
+        console.print(f"{report_url}\n")
 
     if port != 8000:
         console.print(f"Preferred port 8000 unavailable.\nUsing available port {port}.\n")
 
+    primary_filename = os.path.basename(primary_html)
+    primary_phase_str = primary_filename.split("_report_")[0].capitalize().replace("Phase", "Phase ")
+    
     console.print("Starting local report server...\n")
     console.print("Report server:")
     console.print(f"{server_url}\n")
-    console.print("Opening Phase 2 report in your browser...\n")
+    console.print(f"Opening {primary_phase_str} report in your browser...\n")
+    
     console.print("============================================================")
     console.print("LOCAL REPORT SERVER RUNNING")
     console.print("============================================================\n")
     console.print("Server:")
     console.print(f"{server_url}\n")
-    console.print("Phase 1:")
-    console.print(f"{phase1_url}\n")
-    console.print("Phase 2:")
-    console.print(f"{phase2_url}\n")
-    console.print("Browser:\nPhase 2 report opened automatically.\n")
+    
+    for report_path in discovered_reports:
+        report_path = report_path.replace("\\", "/")
+        filename = os.path.basename(report_path)
+        phase_str = filename.split("_report_")[0].capitalize().replace("Phase", "Phase ")
+        report_url = f"http://localhost:{port}/{report_path}"
+        console.print(f"{phase_str}:")
+        console.print(f"{report_url}\n")
+        
+    console.print(f"Browser:\n{primary_phase_str} report opened automatically.\n")
     console.print("Press Ctrl+C to stop the report server.")
-    console.print("============================================================\n")
+    console.print("============================================================")
 
-    webbrowser.open(phase2_url)
+    webbrowser.open(primary_url)
 
     # Use the project root as the handler's directory
     class QuietHandler(SimpleHTTPRequestHandler):

@@ -6,6 +6,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+from src.analysis.plot_style import setup_plot_style, save_plot, get_compound_palette
+
 
 def generate_data_quality_profile(df_laps: pd.DataFrame, df_tel: pd.DataFrame) -> Dict[str, pd.DataFrame]:
     """
@@ -69,12 +71,7 @@ def generate_descriptive_summaries(df_laps: pd.DataFrame) -> Tuple[pd.DataFrame,
     return driver_stats, compound_stats
 
 
-def _save_plot(fig, output_dir: str, filename: str):
-    """Helper to save plot and close figure."""
-    os.makedirs(output_dir, exist_ok=True)
-    fig.tight_layout()
-    fig.savefig(os.path.join(output_dir, filename), dpi=300, bbox_inches="tight")
-    plt.close(fig)
+
 
 
 def plot_lap_time_distribution(df_laps: pd.DataFrame, output_dir: str):
@@ -95,7 +92,7 @@ def plot_lap_time_distribution(df_laps: pd.DataFrame, output_dir: str):
             transform=ax.transAxes, ha="right", va="top",
             bbox=dict(boxstyle="round,pad=0.3", fc="white", alpha=0.8))
             
-    _save_plot(fig, output_dir, "eda_lap_time_distribution.png")
+    save_plot(fig, output_dir, "eda_lap_time_distribution.png")
 
 
 def plot_driver_performance(df_laps: pd.DataFrame, output_dir: str):
@@ -115,14 +112,13 @@ def plot_driver_performance(df_laps: pd.DataFrame, output_dir: str):
     ax.set_ylabel("Lap Time (Seconds)")
     ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
     
-    _save_plot(fig, output_dir, "eda_driver_performance.png")
+    save_plot(fig, output_dir, "eda_driver_performance.png")
 
 
 def plot_compound_performance(df_laps: pd.DataFrame, output_dir: str):
     """Box plot of lap times by tyre compound."""
     clean_laps = df_laps[df_laps["is_clean_lap"] == True].copy()
-    # Filter out unknown compounds
-    clean_laps = clean_laps[clean_laps["Compound"].isin(["SOFT", "MEDIUM", "HARD", "INTERMEDIATE", "WET"])]
+    clean_laps = clean_laps.dropna(subset=["Compound"])
     if clean_laps.empty or "LapTime_s" not in clean_laps.columns:
         return
         
@@ -130,19 +126,19 @@ def plot_compound_performance(df_laps: pd.DataFrame, output_dir: str):
     medians = clean_laps.groupby("Compound")["LapTime_s"].median().sort_values()
     
     fig, ax = plt.subplots(figsize=(12, 8))
-    sns.boxplot(data=clean_laps, x="Compound", y="LapTime_s", order=medians.index, ax=ax, palette="Set2")
+    sns.boxplot(data=clean_laps, x="Compound", y="LapTime_s", order=medians.index, ax=ax, palette=get_compound_palette(clean_laps["Compound"].unique()))
     
     ax.set_title("Clean Lap Performance by Tyre Compound", fontsize=14)
     ax.set_xlabel("Tyre Compound")
     ax.set_ylabel("Lap Time (Seconds)")
     
-    _save_plot(fig, output_dir, "eda_compound_performance.png")
+    save_plot(fig, output_dir, "eda_compound_performance.png")
 
 
 def plot_tyre_age_vs_lap_time(df_laps: pd.DataFrame, output_dir: str):
     """Scatter plot of Tyre Age vs Lap Time with trendlines per compound."""
     clean_laps = df_laps[df_laps["is_clean_lap"] == True].copy()
-    clean_laps = clean_laps[clean_laps["Compound"].isin(["SOFT", "MEDIUM", "HARD"])]
+    clean_laps = clean_laps.dropna(subset=["Compound"])
     
     if clean_laps.empty or "LapTime_s" not in clean_laps.columns or "TyreLife" not in clean_laps.columns:
         return
@@ -150,7 +146,7 @@ def plot_tyre_age_vs_lap_time(df_laps: pd.DataFrame, output_dir: str):
     fig, ax = plt.subplots(figsize=(14, 8))
     
     # lmplot creates its own figure, so use regplot in a loop or scatterplot
-    sns.scatterplot(data=clean_laps, x="TyreLife", y="LapTime_s", hue="Compound", style="Compound", alpha=0.7, ax=ax, palette="Set1")
+    sns.scatterplot(data=clean_laps, x="TyreLife", y="LapTime_s", hue="Compound", style="Compound", alpha=0.7, ax=ax, palette=get_compound_palette(clean_laps["Compound"].unique()))
     
     # Add simple trendlines
     for comp in clean_laps["Compound"].unique():
@@ -165,7 +161,7 @@ def plot_tyre_age_vs_lap_time(df_laps: pd.DataFrame, output_dir: str):
     # Move legend out
     ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
              
-    _save_plot(fig, output_dir, "eda_tyre_age_degradation.png")
+    save_plot(fig, output_dir, "eda_tyre_age_degradation.png")
 
 
 def plot_data_quality(df_laps: pd.DataFrame, output_dir: str):
@@ -192,7 +188,7 @@ def plot_data_quality(df_laps: pd.DataFrame, output_dir: str):
     ax.pie(sizes, labels=labels, colors=colors, autopct='%1.1f%%', startangle=90, wedgeprops={'edgecolor': 'white'})
     ax.set_title("Dataset Lap Composition", fontsize=14)
     
-    _save_plot(fig, output_dir, "eda_data_quality.png")
+    save_plot(fig, output_dir, "eda_data_quality.png")
 
 
 def plot_track_temp_vs_lap_time(df_laps: pd.DataFrame, output_dir: str):
@@ -214,7 +210,7 @@ def plot_track_temp_vs_lap_time(df_laps: pd.DataFrame, output_dir: str):
     ax.set_xlabel("Track Temperature (°C)")
     ax.set_ylabel("Lap Time (Seconds)")
              
-    _save_plot(fig, output_dir, "eda_track_temp_lap_time.png")
+    save_plot(fig, output_dir, "eda_track_temp_lap_time.png")
 
 
 def plot_correlation_heatmap(df_laps: pd.DataFrame, output_dir: str):
@@ -239,5 +235,5 @@ def plot_correlation_heatmap(df_laps: pd.DataFrame, output_dir: str):
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=12)
     plt.setp(ax.get_yticklabels(), rotation=0, fontsize=12)
     
-    _save_plot(fig, output_dir, "eda_correlation_heatmap.png")
+    save_plot(fig, output_dir, "eda_correlation_heatmap.png")
 

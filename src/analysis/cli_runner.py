@@ -10,6 +10,8 @@ from src.f1_data import get_race_weekends_by_year, load_session
 from src.analysis.export import export_lap_data, export_telemetry_data, _get_session_id
 from src.analysis.run_phase1 import run_phase1_analysis
 from src.analysis.run_phase2 import run_phase2
+from src.analysis.run_phase3 import run_phase3
+from src.analysis.run_phase4 import run_phase4
 from src.analysis.report_server import serve_and_open_report
 
 def main():
@@ -105,6 +107,14 @@ def main():
     # Phase 2
     console.print("\n[bold cyan]--- PHASE 2: Telemetry Feature Engineering ---[/bold cyan]")
     run_phase2(session_id, OUTPUT_DIR, "analytics_output")
+    
+    # Phase 3
+    console.print("\n[bold cyan]--- PHASE 3: Advanced Data Science & Modeling ---[/bold cyan]")
+    run_phase3(session_id, OUTPUT_DIR, "analytics_output")
+
+    # Phase 4
+    console.print("\n[bold cyan]--- PHASE 4: Advanced Performance & Strategy Analysis ---[/bold cyan]")
+    run_phase4(session_id, OUTPUT_DIR, "analytics_output")
     
     session_title = f"{year} {event_name} — {session_name}"
     serve_and_open_report(session_id, session_title, "analytics_output")

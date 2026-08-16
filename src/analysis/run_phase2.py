@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from src.analysis.features import engineer_lap_features
+from src.analysis.plot_style import setup_plot_style, save_plot, get_compound_palette
 
 def _is_kde_safe(df: pd.DataFrame, x_col: str, hue_col: str = None) -> bool:
     """
@@ -37,9 +38,7 @@ def plot_feature_vs_laptime(df_features: pd.DataFrame, feature_col: str, title: 
     sns.scatterplot(data=subset, x=feature_col, y="LapTime_s", ax=ax, alpha=0.7, color="teal")
     sns.regplot(data=subset, x=feature_col, y="LapTime_s", scatter=False, ax=ax, color="darkgrey", line_kws={"linestyle": "--"})
     ax.set_title(title, fontsize=14)
-    fig.tight_layout()
-    fig.savefig(os.path.join(output_dir, filename), dpi=300, bbox_inches="tight")
-    plt.close(fig)
+    save_plot(fig, output_dir, filename)
 
 def plot_feature_distributions(df_features: pd.DataFrame, feature_cols: list, title: str, output_dir: str, filename: str):
     """Plot distribution (histogram) of features."""
@@ -60,9 +59,7 @@ def plot_feature_distributions(df_features: pd.DataFrame, feature_cols: list, ti
         ax.set_title(f"Distribution of {col}")
         
     fig.suptitle(title, fontsize=16)
-    fig.tight_layout()
-    fig.savefig(os.path.join(output_dir, filename), dpi=300, bbox_inches="tight")
-    plt.close(fig)
+    save_plot(fig, output_dir, filename)
 
 def run_phase2(session_id: str, data_dir: str, output_dir: str):
     """
@@ -111,35 +108,31 @@ def run_phase2(session_id: str, data_dir: str, output_dir: str):
     
     # 3. Generate initial visual profiles (distributions and pair correlation)
     print("3. Generating Visualizations...")
+    setup_plot_style()
     for feat in ["speed_mean", "throttle_full_pct", "brake_active_pct", "drs_active_pct", "gear_mean", "LapTime_s"]:
         if feat in df_features.columns:
-            plt.figure(figsize=(8, 5))
+            fig, ax = plt.subplots(figsize=(8, 5))
             kde_safe = _is_kde_safe(df_features, feat, "is_clean_lap")
-            sns.histplot(data=df_features, x=feat, hue="is_clean_lap", kde=kde_safe, bins=30)
-            plt.title(f"Distribution of {feat}")
-            plt.tight_layout()
-            plt.savefig(os.path.join(session_output_dir, f"dist_{feat}.png"), bbox_inches="tight")
-            plt.close()
+            sns.histplot(data=df_features, x=feat, hue="is_clean_lap", kde=kde_safe, bins=30, ax=ax)
+            ax.set_title(f"Distribution of {feat}")
+            save_plot(fig, session_output_dir, f"dist_{feat}.png")
             
             # Scatter vs LapTime
             if feat != "LapTime_s":
-                plt.figure(figsize=(8, 5))
-                sns.scatterplot(data=df_features[df_features["is_clean_lap"] == True], x=feat, y="LapTime_s", hue="Compound", alpha=0.7)
-                plt.title(f"{feat} vs LapTime_s (Clean Laps)")
-                plt.tight_layout()
-                plt.savefig(os.path.join(session_output_dir, f"scatter_{feat}_vs_laptime.png"), bbox_inches="tight")
-                plt.close()
+                fig, ax = plt.subplots(figsize=(8, 5))
+                clean_features = df_features[df_features["is_clean_lap"] == True]
+                sns.scatterplot(data=clean_features, x=feat, y="LapTime_s", hue="Compound", alpha=0.7, ax=ax, palette=get_compound_palette(clean_features["Compound"].unique()))
+                ax.set_title(f"{feat} vs LapTime_s (Clean Laps)")
+                save_plot(fig, session_output_dir, f"scatter_{feat}_vs_laptime.png")
                 
     # Correlation heatmap for numerical features
     numeric_feats = df_features.select_dtypes(include=[np.number])
     if not numeric_feats.empty:
-        plt.figure(figsize=(12, 10))
+        fig, ax = plt.subplots(figsize=(12, 10))
         corr = numeric_feats.corr(method="pearson")
-        sns.heatmap(corr, annot=True, cmap="coolwarm", fmt=".2f", center=0, vmin=-1, vmax=1)
-        plt.title("Pearson Correlation of Extracted Features")
-        plt.tight_layout()
-        plt.savefig(os.path.join(session_output_dir, "feature_correlation.png"), bbox_inches="tight")
-        plt.close()
+        sns.heatmap(corr, annot=True, cmap="coolwarm", fmt=".2f", center=0, vmin=-1, vmax=1, ax=ax)
+        ax.set_title("Pearson Correlation of Extracted Features")
+        save_plot(fig, session_output_dir, "feature_correlation.png")
         
     print("4. Generating Phase 2 Report...")
     from src.analysis.report_phase2 import generate_phase2_report

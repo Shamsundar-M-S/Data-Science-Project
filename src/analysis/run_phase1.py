@@ -13,6 +13,7 @@ from src.analysis.eda import (
     plot_track_temp_vs_lap_time,
     plot_correlation_heatmap
 )
+from src.analysis.plot_style import setup_plot_style
 from src.analysis.statistics import (
     calculate_correlations,
     analyze_weather_impact,
@@ -65,8 +66,10 @@ def run_phase1_analysis(session_id: str, data_dir: str, output_dir: str):
     driver_stats.to_csv(os.path.join(session_output_dir, "summary_drivers.csv"), index=False)
     compound_stats.to_csv(os.path.join(session_output_dir, "summary_compounds.csv"), index=False)
     
+    
     # 3. EDA Plots
     print("3. Generating EDA Visualizations...")
+    setup_plot_style()
     plot_lap_time_distribution(df_laps, session_output_dir)
     plot_driver_performance(df_laps, session_output_dir)
     plot_compound_performance(df_laps, session_output_dir)

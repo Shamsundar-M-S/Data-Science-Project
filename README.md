@@ -2,31 +2,73 @@
 
 A comprehensive Python pipeline for acquiring, cleaning, analyzing, and visualizing Formula 1 race telemetry.
 
-This project is a dedicated Data Science and analytics platform. Its primary focus is robust telemetry processing, exploratory data analysis (EDA), statistical evaluation, feature engineering, and reproducible graphical reporting. 
+This project is a dedicated Data Science and analytics platform. Its primary focus is robust telemetry processing, exploratory data analysis (EDA), statistical evaluation, feature engineering, lap-time explanatory modeling, strategy analytics, and reproducible graphical reporting.
 
-> **Note:** This is currently an analytical and feature-engineering project, not an active Machine Learning or predictive platform. Advanced ML, clustering, and forecasting are planned for a future Phase 3.
+Visualization is a **core project requirement**: the platform is visualization-first in its user-facing output. Analytical results are presented through interactive, session-specific graphical HTML reports containing KPI summaries, EDA plots, feature distributions, scatter plots, correlation matrices, model diagnostics, feature importance, tyre degradation trends, stint analysis, driver pace, compound analysis, and strategy visualizations.
 
 ---
 
-## Project Architecture
+## Project Architecture & Data Flow
 
-The pipeline processes raw F1 telemetry through a strict multi-phase architecture. Each phase builds upon the outputs of the previous phase to ensure reproducibility and temporal integrity:
+The pipeline processes raw F1 telemetry through a strict multi-phase architecture. Each phase builds upon the outputs of the previous phase to ensure reproducibility and temporal integrity.
 
-**Raw FastF1 Data**  
-↓  
+The data flow is structured as follows:
+
+**FastF1**  
+    ↓  
+**Session Selection**  
+    ↓  
 **Phase 0:** Data Extraction & Clean Analytical Dataset  
-↓  
+    ↓  
+**Session-specific Parquet datasets**  
+    ↓  
 **Phase 1:** EDA + Statistics  
-↓  
-**Phase 1:** Graphical Report  
-↓  
+    ↓  
 **Phase 2:** Telemetry Feature Engineering  
-↓  
-**Phase 2:** Feature Dataset  
-↓  
-**Phase 2:** Graphical Report  
-↓  
-*(Future) Phase 3: Advanced Modeling / ML*
+    ↓  
+**Phase 3:** Explanatory Modeling  
+    ↓  
+**Phase 4:** Tyre / Stint / Strategy Analysis  
+    ↓  
+**HTML Reports**  
+    ↓  
+**Localhost HTTP Server**  
+    ↓  
+**Automatic Browser Opening**  
+
+---
+
+## Multi-Session / Multi-Race Architecture
+
+The project is **not restricted to a single hardcoded race**. The architecture supports multiple seasons, multiple events, and multiple sessions.
+
+Users interactively select the desired Session, which generates a canonical **`session_id`** (e.g., `2026_09_British_Grand_Prix_Race`, `2023_01_Bahrain_Grand_Prix_Practice_1`).
+
+The selected session dictates the entire pipeline:
+- Session-specific data is completely isolated.
+- Phase 1, 2, 3, and 4 logic processes only that specific session.
+- No cross-session data leakage occurs.
+
+---
+
+## Outputs
+
+The project strictly separates analytical datasets from generated reports.
+
+**`analytics_data/`**  
+Contains session-specific Parquet datasets:
+- `{session_id}_laps.parquet`
+- `{session_id}_telemetry.parquet`
+- `{session_id}_features.parquet`
+
+**`analytics_output/`**  
+Contains session-specific HTML and PNG visualization assets, isolated in a dedicated subdirectory:
+- `analytics_output/{session_id}/`
+  - `phase1_report_{session_id}.html`
+  - `phase2_report_{session_id}.html`
+  - `phase3_report_{session_id}.html`
+  - `phase4_report_{session_id}.html`
+  - Associated PNG assets
 
 ---
 
@@ -35,6 +77,19 @@ The pipeline processes raw F1 telemetry through a strict multi-phase architectur
 ### Requirements
 - Python 3.12.10
 - Virtual environment (`venv312`)
+- Dependencies (from `requirements.txt`):
+  - `fastf1`
+  - `pandas`
+  - `matplotlib`
+  - `numpy`
+  - `arcade`
+  - `pyside6`
+  - `questionary`
+  - `rich`
+  - `scipy`
+  - `pyarrow>=14.0.0`
+  - `seaborn>=0.13.0`
+  - `scikit-learn`
 
 ### Installation & Execution
 
@@ -52,113 +107,158 @@ pip install -r requirements.txt
 python -m src.analysis.cli_runner
 ```
 
-Upon executing the CLI runner, you will be prompted to select a **Season**, **Event**, and **Session**. The pipeline will automatically acquire data, process it through Phases 0–2, and launch a local HTTP server to display your interactive graphical reports.
+### CLI User Experience
 
----
-
-## Multi-Session Architecture
-
-The platform supports generic multi-session and multi-race analysis. You are not restricted to a single hardcoded race. 
-
-Users interactively select the desired Session, which generates a canonical **`session_id`** (e.g., `2026_09_British_Grand_Prix_Race`, `2023_01_Bahrain_Grand_Prix_Practice_1`).
-
-The selected session dictates the entire pipeline:
-- `FastF1` dynamically fetches the correct data.
-- Isolated Phase 0 datasets are generated.
-- Phase 1 and Phase 2 logic processes only that specific session.
-- Output graphical assets and HTML reports are sandboxed within `analytics_output/{session_id}/`.
-
-**No cross-session data leakage occurs.**
-
-### Local Cache Behavior
-To ensure high performance and prevent unnecessary API limits:
-1. The application checks whether the required Phase 0 analytical Parquet datasets already exist locally.
-2. If they exist, the pipeline bypasses the FastF1 API and loads data directly from the local disk cache.
-3. If they do not exist, the required session is fetched via FastF1, structured into Parquet files by Phase 0, and permanently cached for future runs.
+When running the CLI, the workflow is:
+1. Select Season
+2. Select Event
+3. Select Session
+4. The system checks whether the selected session already exists locally.
+5. If cached, the local Parquet data is reused.
+6. If not cached, the FastF1 acquisition pipeline obtains the selected session (Phase 0).
+7. Phase 1 executes.
+8. Phase 2 executes.
+9. Phase 3 executes.
+10. Phase 4 executes.
+11. The localhost report server starts (so relative PNG assets render safely).
+12. The browser automatically opens the generated report (no manual file navigation required).
+13. The server remains alive until `Ctrl+C` is pressed.
 
 ---
 
 ## Phase 0 — Data Science Foundation
 
-Phase 0 abstracts raw FastF1 acquisition into a clean, GUI-independent data foundation suitable for pure Pandas-based analytics.
-
-It creates two primary, session-isolated Parquet datasets:
-1. `{session_id}_laps.parquet`: High-level lap metadata and timings.
-2. `{session_id}_telemetry.parquet`: High-frequency, flat time-series telemetry data (e.g., `Distance`, `Speed`, `nGear`, `Throttle`, `Brake`, `DRS`, `X`, `Y`, `SessionTime`).
+Phase 0 abstracts FastF1 acquisition into a clean data foundation. It relies on local caching and session isolation to output standard lap data and telemetry data as Parquet files.
 
 ### The Clean Lap Source of Truth
-Phase 0 introduces a centralized, mathematically rigorous definition of a "clean lap" via the `is_clean_lap` boolean flag. This flag considers:
-- Pit-lane activity (in-laps, out-laps).
-- Laps affected by Safety Cars or Virtual Safety Cars.
-- FastF1 telemetry accuracy indicators.
-
-The `is_clean_lap` flag is universally utilized by Phase 1 and Phase 2 to filter out anomalous data points before performing sensitive statistical analyses.
+Phase 0 introduces a centralized, mathematically rigorous definition of a "clean lap" via the `is_clean_lap` boolean flag. This ensures that laps affected by pit-lane activity (in-laps, out-laps) or Safety Cars/Virtual Safety Cars are universally excluded from pace analysis. This flag serves as the project-wide source of truth for clean-lap filtering.
 
 ---
 
 ## Phase 1 — Exploratory Data Analysis & Statistics
 
-Phase 1 provides a comprehensive, non-parametric evaluation of the Phase 0 lap data.
-
-**Data Quality:**
-- Missing-value profiling and unique-value counts.
-- Integrity checks for telemetry accuracy.
+Phase 1 provides comprehensive, non-parametric evaluation of the lap data.
 
 **Descriptive Analysis:**
-- Lap-time distributions.
-- Comparative driver performance evaluations.
-- Tyre compound performance.
-- Tyre age degradation profiling.
+- Data quality profiling
+- Lap-time distributions
+- Driver performance
+- Tyre compound performance
+- Tyre age relationships
+- Track temperature relationships
 
 **Statistical Analysis:**
-Formula 1 data is rarely normally distributed. Phase 1 actively embraces robust non-parametric tests:
-- **Kruskal-Wallis H-test** for evaluating significant differences across groups (e.g., compound performance).
-- **Spearman rank correlation** and **Pearson correlation** to identify associations between continuous variables (e.g., Track Temperature vs. Lap Time).
+Formula 1 data is rarely normally distributed. Phase 1 embraces robust methods:
+- **Kruskal-Wallis H-test** and **effect size** for group differences.
+- **Spearman** and **Pearson** correlations for continuous variables.
 
-*(Note: These are observed associations. The pipeline explicitly acknowledges the absence of causal inference variables like Fuel Load and Engine Modes.)*
-
-### Phase 1 Graphical Report
-Phase 1 automatically compiles its EDA and statistical findings into a standalone HTML graphical report containing:
-- Dataset overviews and data quality summaries.
-- Box plots of tyre compound performance.
-- Distribution curves of lap times.
-- Linear regression models of tyre age vs lap time.
-- Track temperature correlations.
+*Note: The project explicitly emphasizes association/correlation and avoids overstating statistical significance or claiming causation.*
 
 ---
 
 ## Phase 2 — Telemetry Feature Engineering
 
-Phase 2 transforms the high-frequency telemetry matrices generated in Phase 0 into highly structured, per-lap analytical features. 
+Phase 2 engineers high-frequency telemetry into structured, per-lap features.
 
-The resulting `{session_id}_features.parquet` dataset contains **one row per driver per lap**. Telemetry metrics are securely aggregated using strict temporal isolation: telemetry from Lap `N` is never allowed to leak into the calculation for Lap `N+1`.
+**Engineered Features:**
+- `speed_max`, `speed_mean`, `speed_std`
+- `throttle_mean`, `throttle_full_pct`
+- `brake_active_pct`, `brake_events_count`
+- `drs_active_pct`
+- `gear_mean`, `gear_max`, `gear_8_pct`
+- `telemetry_sample_count`, `distance_span`
 
-### Engineered Feature Profiles
-- **Speed:** `speed_max`, `speed_mean`, `speed_std`
-- **Throttle:** `throttle_mean`, `throttle_full_pct`
-- **Braking:** `brake_active_pct`, `brake_events_count` *(Calculates continuous braking event blocks rather than raw sample frames)*
-- **DRS:** `drs_active_pct` *(Evaluates active states based on canonical thresholds)*
-- **Gears:** `gear_mean`, `gear_max`, `gear_8_pct`
-- **Quality Metrics:** `telemetry_sample_count`, `distance_span`
-
-The feature dataset strictly retains required contextual metadata (`Driver`, `LapNumber`, `LapTime_s`, `Compound`, `TyreLife`, `TrackTemp`, `is_clean_lap`).
-
-### Phase 2 Graphical Report
-The engineered features are automatically visualized in a dedicated HTML report:
-- **Distribution Visualizations:** Analyzes the spread of Speed, Throttle, Braking, DRS, and Gear usage across the grid.
-- **Relationship Visualizations:** Scatter plots analyzing the direct effect of engineered features on lap times.
-- **Correlation Matrix:** A heatmap evaluating collinearity among the engineered features.
-
-#### Visualization Robustness
-Real-world F1 data frequently contains degenerate distributions (e.g., drivers who never activated DRS during a rain-affected session, resulting in zero-variance arrays). The Phase 2 pipeline dynamically validates statistical viability before rendering plots. If Kernel Density Estimation (KDE) is mathematically unsafe (e.g., singular covariance matrices), the pipeline seamlessly disables KDE and falls back to rendering standard histograms. This guarantees that visual analysis never crashes and never drops valid data points.
+**Temporal Isolation:**
+These features are calculated at the lap level using telemetry from the corresponding lap. Temporal isolation is absolute: Lap N telemetry generates Lap N features. (Lap N + Lap N+1 telemetry is never allowed to leak into Lap N features).
 
 ---
 
-## Graphical Report Delivery
+## Phase 3 — Explanatory Modeling
 
-The user experience terminates with a fully automated reporting flow:
-1. Upon analysis completion, the CLI boots a native, dependency-free local HTTP server.
-2. The server seamlessly maps to the output analytics directory.
-3. The Phase 2 Graphical Report is automatically popped open in your default web browser.
-4. Relative asset paths (PNGs, CSS) reliably resolve via `localhost`, completely bypassing restrictive `file://` protocol limitations.
-5. The local server stays alive (`Ctrl+C` to quit), allowing the user ample time to interrogate the generated interactive HTML reports for both Phase 1 and Phase 2.
+**Objective:** Lap-Time Explanatory Modeling & Telemetry Feature Importance.
+
+Phase 3 builds a `RandomForestRegressor` against a `DummyRegressor` baseline to predict the target `LapTime_s` for clean laps (`is_clean_lap == True`). It uses K-Fold Cross Validation and evaluates RMSE and R².
+
+**Scientific Framing (Crucial):**
+This model is **NOT** for "predicting future lap times", "forecasting the next lap", or establishing the "causal impact of telemetry variables."
+
+Because the telemetry features are contemporaneous with the lap-time target, the model is strictly intended for explanatory analysis, extracting feature importance, and understanding variance.
+
+*Methodological Limitation:* Ordinary K-Fold CV can place laps from the same driver/stint into both training and validation sets, which may produce optimistic performance estimates due to autocorrelation. This is a known limitation of the explanatory setup.
+
+---
+
+## Phase 4 — Performance & Strategy Analysis
+
+Phase 4 executes advanced Data Science on:
+1. Tyre degradation
+2. Stint pace
+3. Driver pace
+4. Compound performance
+5. Strategy timeline
+
+**Scientific Framing:** Tyre degradation is presented purely as **observational** (observed lap-time evolution). The calculated slope is not "pure tyre degradation" because it is heavily confounded by factors such as fuel burn-off and track evolution. Furthermore, strategy timeline analysis has session-specific semantics and gracefully adapts depending on whether the session is a Race or not.
+
+---
+
+## Scientific Limitations
+
+The project explicitly acknowledges the following real-world F1 limitations:
+- Fuel load is not directly modeled or controlled.
+- Fuel burn-off heavily influences lap time.
+- Track evolution, traffic, and driver behavior influence lap time.
+- Setup differences influence performance.
+- Weather and track conditions can change mid-session.
+- Telemetry-derived features are contemporaneous, not leading indicators.
+- Repeated laps from the same driver/stint are not necessarily independent observations.
+- Small sessions (e.g., interrupted practices) can produce unstable statistical estimates.
+- Observed relationships should not automatically be interpreted as causal.
+
+---
+
+## Robustness
+
+The codebase includes several active robustness mechanisms:
+- Cached-session detection
+- Strict session isolation
+- Missing telemetry and insufficient data handling
+- Degenerate KDE fallback (to standard histograms if distributions lack variance)
+- Missing/NaN handling
+- Graceful model fallback
+- Non-Race strategy handling
+- Relative HTML asset paths delivered via a browser-safe localhost server
+
+---
+
+## Testing
+
+The project uses `pytest` to protect analytical logic. At the time of the final diagnostic, the test suite result was:
+- 123 tests passed
+- 0 failed
+- 0 skipped
+- 21 warnings (third-party deprecations)
+
+The tests cover feature engineering, braking-event logic, KDE robustness, report generation, report assets, Phase 3 modeling, Phase 4 strategy, multi-session behavior, and E2E flows.
+
+---
+
+## Project Structure
+
+```
+C:\Data Science Project\
+├── analytics_data/         # Generated Parquet datasets
+├── analytics_output/       # Generated HTML/PNG reports (git ignored)
+├── docs/                   # Additional documentation
+├── src/                    # Source Code
+│   ├── analysis/           # Phase 0-4 Analytical Logic
+│   ├── lib/                # Shared utilities
+│   ├── gui/                # (Deprecated/Legacy UI)
+│   ├── f1_data.py          # FastF1 handlers
+│   └── main.py             # (Legacy entry point)
+├── tests/                  # Pytest suite
+│   ├── analysis/
+│   └── lib/
+├── requirements.txt
+├── .gitignore
+└── README.md               # This file
+```
