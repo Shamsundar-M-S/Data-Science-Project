@@ -83,7 +83,7 @@ def plot_lap_time_distribution(df_laps: pd.DataFrame, output_dir: str):
     if clean_laps.empty or "LapTime_s" not in clean_laps.columns:
         return
         
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(14, 8))
     sns.histplot(data=clean_laps, x="LapTime_s", kde=True, ax=ax, color="steelblue")
     
     ax.set_title("Clean Lap Time Distribution", fontsize=14)
@@ -107,7 +107,7 @@ def plot_driver_performance(df_laps: pd.DataFrame, output_dir: str):
     # Order drivers by median lap time
     medians = clean_laps.groupby("Driver")["LapTime_s"].median().sort_values()
     
-    fig, ax = plt.subplots(figsize=(12, 6))
+    fig, ax = plt.subplots(figsize=(16, 8))
     sns.boxplot(data=clean_laps, x="Driver", y="LapTime_s", order=medians.index, ax=ax, palette="viridis")
     
     ax.set_title("Clean Lap Performance by Driver", fontsize=14)
@@ -129,7 +129,7 @@ def plot_compound_performance(df_laps: pd.DataFrame, output_dir: str):
     # Order by median
     medians = clean_laps.groupby("Compound")["LapTime_s"].median().sort_values()
     
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(12, 8))
     sns.boxplot(data=clean_laps, x="Compound", y="LapTime_s", order=medians.index, ax=ax, palette="Set2")
     
     ax.set_title("Clean Lap Performance by Tyre Compound", fontsize=14)
@@ -147,7 +147,7 @@ def plot_tyre_age_vs_lap_time(df_laps: pd.DataFrame, output_dir: str):
     if clean_laps.empty or "LapTime_s" not in clean_laps.columns or "TyreLife" not in clean_laps.columns:
         return
         
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(14, 8))
     
     # lmplot creates its own figure, so use regplot in a loop or scatterplot
     sns.scatterplot(data=clean_laps, x="TyreLife", y="LapTime_s", hue="Compound", style="Compound", alpha=0.7, ax=ax, palette="Set1")
@@ -164,10 +164,6 @@ def plot_tyre_age_vs_lap_time(df_laps: pd.DataFrame, output_dir: str):
     
     # Move legend out
     ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    
-    # Add limitations note
-    fig.text(0.5, -0.05, "Limitation: Trend does not control for fuel burn, track evolution, or driver.", 
-             ha="center", fontsize=9, style="italic")
              
     _save_plot(fig, output_dir, "eda_tyre_age_degradation.png")
 
@@ -177,7 +173,7 @@ def plot_data_quality(df_laps: pd.DataFrame, output_dir: str):
     if df_laps.empty or "is_clean_lap" not in df_laps.columns:
         return
         
-    fig, ax = plt.subplots(figsize=(6, 6))
+    fig, ax = plt.subplots(figsize=(8, 8))
     counts = df_laps["is_clean_lap"].value_counts()
     
     # Ensure True/False keys exist for mapping
@@ -210,16 +206,13 @@ def plot_track_temp_vs_lap_time(df_laps: pd.DataFrame, output_dir: str):
     if subset.empty:
         return
         
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(14, 8))
     sns.scatterplot(data=subset, x="TrackTemp", y="LapTime_s", ax=ax, color="darkorange", alpha=0.7)
     sns.regplot(data=subset, x="TrackTemp", y="LapTime_s", scatter=False, ax=ax, color="dimgrey", line_kws={"linestyle": "--"})
     
     ax.set_title("Track Temperature vs Clean Lap Time", fontsize=14)
     ax.set_xlabel("Track Temperature (°C)")
     ax.set_ylabel("Lap Time (Seconds)")
-    
-    fig.text(0.5, -0.05, "Limitation: Association may be heavily confounded by fuel load, run plans, and track evolution.", 
-             ha="center", fontsize=9, style="italic")
              
     _save_plot(fig, output_dir, "eda_track_temp_lap_time.png")
 
@@ -236,18 +229,15 @@ def plot_correlation_heatmap(df_laps: pd.DataFrame, output_dir: str):
         
     corr = clean_laps[existing_vars].corr(method="pearson")
     
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(14, 10))
     sns.heatmap(corr, annot=True, cmap="coolwarm", center=0, fmt=".2f", 
-                square=True, linewidths=.5, cbar_kws={"shrink": .8}, ax=ax)
+                square=True, linewidths=.5, cbar_kws={"shrink": .8}, ax=ax, annot_kws={"size": 12})
                 
-    ax.set_title("Pairwise Pearson Correlation Matrix", fontsize=14)
-    
-    fig.text(0.5, -0.05, "Note: Pairwise correlations do not adjust for confounding variables.", 
-             ha="center", fontsize=9, style="italic")
+    ax.set_title("Pairwise Pearson Correlation Matrix", fontsize=16)
              
     # Ensure tick labels are rotated properly to avoid clipping
-    plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
-    plt.setp(ax.get_yticklabels(), rotation=0)
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=12)
+    plt.setp(ax.get_yticklabels(), rotation=0, fontsize=12)
     
     _save_plot(fig, output_dir, "eda_correlation_heatmap.png")
 
