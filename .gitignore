@@ -88,3 +88,6 @@ Desktop.ini
 
 # Generated Reports
 coverage.xml
+
+# Screenshots (Verification)
+screenshots/
