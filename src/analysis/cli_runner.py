@@ -12,6 +12,7 @@ from src.analysis.run_phase1 import run_phase1_analysis
 from src.analysis.run_phase2 import run_phase2
 from src.analysis.run_phase3 import run_phase3
 from src.analysis.run_phase4 import run_phase4
+from src.analysis.run_phase5 import run_phase5
 from src.analysis.report_server import serve_and_open_report
 
 def main():
@@ -116,6 +117,10 @@ def main():
     console.print("\n[bold cyan]--- PHASE 4: Advanced Performance & Strategy Analysis ---[/bold cyan]")
     run_phase4(session_id, OUTPUT_DIR, "analytics_output")
     
+    # Phase 5
+    console.print("\n[bold cyan]--- PHASE 5: Race Outcome Predictive Analytics ---[/bold cyan]")
+    run_phase5(session_id, OUTPUT_DIR, "analytics_output")
+
     session_title = f"{year} {event_name} — {session_name}"
     serve_and_open_report(session_id, session_title, "analytics_output")
 
